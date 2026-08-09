@@ -80,7 +80,7 @@ function settleUnsold(room){
 }
 const server=http.createServer((req,res)=>{
   let p=req.url.split('?')[0]; if(p==='/')p='/index.html';
-  const file=path.join(__dirname,'public',p);
+  const file=path.join(__dirname,p);
   fs.readFile(file,(e,d)=>{if(e){res.writeHead(404);return res.end('Not found')} 
     const ext=path.extname(file); const ct={'.html':'text/html;charset=utf-8','.js':'text/javascript','.css':'text/css'}[ext]||'text/plain';
     res.writeHead(200,{'Content-Type':ct});res.end(d);
