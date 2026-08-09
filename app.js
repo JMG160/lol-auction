@@ -1,35 +1,51 @@
-let ws, uid, code;
+let ws = null;
+let uid = null;
+let code = null;
+
 const $ = id => document.getElementById(id);
 
 function 연결하다(onOpen) {
+  // 이미 연결되어 있으면 그대로 사용
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    if (onOpen) onOpen();
+    return;
+  }
+
   const protocol = location.protocol === "https:" ? "wss://" : "ws://";
 
   ws = new WebSocket(protocol + location.host);
 
   ws.onopen = () => {
     console.log("WebSocket 연결 완료");
-    if (onOpen) onOpen();
+
+    if (onOpen) {
+      onOpen();
+    }
   };
 
   ws.onmessage = e => {
-    const m = JSON.parse(e.data);
+    try {
+      const m = JSON.parse(e.data);
 
-    if (m.type === "joined") {
-      uid = m.uid;
-      code = m.code;
+      if (m.type === "joined") {
+        uid = m.uid;
+        code = m.code;
 
-      if ($("join")) $("join").hidden = true;
-      if ($("game")) $("game").hidden = false;
-      if ($("roomcode")) $("roomcode").textContent = code;
-      if ($("joinmsg")) $("joinmsg").textContent = "";
-    }
+        if ($("join")) $("join").hidden = true;
+        if ($("game")) $("game").hidden = false;
+        if ($("roomcode")) $("roomcode").textContent = code;
+        if ($("joinmsg")) $("joinmsg").textContent = "";
+      }
 
-    if (m.type === "오류") {
-      alert(m.메시지);
-    }
+      if (m.type === "오류") {
+        alert(m.메시지);
+      }
 
-    if (m.type === "상태") {
-      렌더링(m.수);
+      if (m.type === "상태") {
+        렌더링(m.수);
+      }
+    } catch (err) {
+      console.error("메시지 처리 오류:", err);
     }
   };
 
@@ -39,16 +55,18 @@ function 연결하다(onOpen) {
 
   ws.onclose = () => {
     console.log("WebSocket 연결 종료");
+    ws = null;
   };
 }
 
 function 보내세요(x) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     console.error("WebSocket이 아직 연결되지 않았습니다.");
-    return;
+    return false;
   }
 
   ws.send(JSON.stringify(x));
+  return true;
 }
 
 function 만들다() {
@@ -107,24 +125,21 @@ function 렌더링(s) {
 
   const active = s.current || s.unsoldCurrent;
 
-  // 현재 단계
   if ($("phase")) {
     $("phase").textContent =
       s.phase === "auction"
         ? "경매 중"
         : s.phase === "unsoldAuction"
-        ? "경매 중"
+        ? "미낙찰 재경매"
         : s.phase === "finished"
         ? "종료"
         : "대기";
   }
 
-  // 남은 선수 수
   if ($("remain")) {
     $("remain").textContent = s.remaining ?? "";
   }
 
-  // 현재 경매 선수
   if ($("current")) {
     if (active) {
       $("current").innerHTML = `
@@ -132,11 +147,10 @@ function 렌더링(s) {
         <div class="player">${active.player?.name || ""}</div>
       `;
     } else {
-      $("current").innerHTML = "<div>대기 중</div>";
+      $("current").innerHTML = "대기 중";
     }
   }
 
-  // 추첨 버튼
   if ($("draw")) {
     $("draw").disabled =
       !active ||
@@ -145,14 +159,12 @@ function 렌더링(s) {
       s.phase === "finished";
   }
 
-  // 미판매 경매 시작 버튼
   if ($("startUnsold")) {
     $("startUnsold").disabled =
       !s.unsold ||
       s.unsold.length === 0;
   }
 
-  // 미판매 선수 목록
   if ($("unsoldList")) {
     $("unsoldList").innerHTML = (s.unsold || [])
       .map(
@@ -162,7 +174,6 @@ function 렌더링(s) {
       .join("");
   }
 
-  // 현재 입찰 정보
   if (active && $("bidbox")) {
     $("bidbox").hidden = false;
 
@@ -178,7 +189,6 @@ function 렌더링(s) {
     }
   }
 
-  // 사용자 목록
   if ($("users")) {
     $("users").innerHTML = (s.users || [])
       .map(
@@ -191,7 +201,7 @@ function 렌더링(s) {
               ${(u.roster || [])
                 .map(
                   p =>
-                    `<span class="tag">${p.position} ${p.name} ${p.price || ""}</span>`
+                    `${p.position} ${p.name} ${p.price || ""}`
                 )
                 .join("")}
             </div>
@@ -201,7 +211,6 @@ function 렌더링(s) {
       .join("");
   }
 
-  // 경매 기록
   if ($("history")) {
     $("history").innerHTML = (s.history || [])
       .map(
@@ -219,7 +228,6 @@ function 렌더링(s) {
       .join("");
   }
 
-  // 종료 메시지
   if ($("remaining")) {
     $("remaining").textContent =
       s.phase === "finished" ? "경매 종료" : "";
